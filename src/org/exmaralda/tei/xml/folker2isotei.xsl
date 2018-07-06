@@ -5,7 +5,7 @@
 -->        
 <xsl:stylesheet version="2.0"
     xmlns:xsl="http://www.w3.org/1999/XSL/Transform" 
-    xmlns:tesla="http://www.exmaralda.org" 
+    xmlns:exmaralda="http://www.exmaralda.org" 
     xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
     <!-- new 08-07-2016 -->
@@ -14,13 +14,16 @@
     <xsl:param name="LANGUAGE">xx</xsl:param>
     <!-- new 22-06-2018 -->
     <!-- if this parameter is set to TRUE, <w> elements will get inline attributes @norm, @lemma and @pos -->
-    <xsl:param name="MAKE_INLINE_ATTRIBUTES">FALSE</xsl:param>
+    <xsl:param name="MAKE_INLINE_ATTRIBUTES">TRUE</xsl:param>
     <!-- new 22-06-2018 -->
     <!-- if this parameter is set to TRUE, <span> elements will be produced for normalisation, lemmatisation and POS tags -->
     <xsl:param name="MAKE_STANDOFF_ANNOTATIONS">FALSE</xsl:param>
     <!-- new 25-06-2018 -->
     <!-- if this parameter is set to TRUE, XPointers will be used instead of IDREFs -->
     <xsl:param name="USE_XPOINTER">FALSE</xsl:param>
+    <!-- new 05-07-2018 -->
+    <!-- if this parameter is set to TRUE, a <seg type='contribution'> will be introduced -->
+    <xsl:param name="ENFORCE_SEG">TRUE</xsl:param>
     
     <xsl:output method="xml" encoding="UTF-8"/>
     
@@ -37,7 +40,7 @@
     <!-- *************       FUNCTIONS         ***************** -->
     <!-- ******************************************************* -->
     
-    <xsl:function name="tesla:determine-recording-type">
+    <xsl:function name="exmaralda:determine-recording-type">
         <xsl:param name="path"/>
         <xsl:choose>
             <xsl:when test="ends-with(lower-case($path), '.wav')">audio</xsl:when>
@@ -48,7 +51,7 @@
         </xsl:choose>        
     </xsl:function>
 
-    <xsl:function name="tesla:seconds-to-timestring">
+    <xsl:function name="exmaralda:seconds-to-timestring">
         <xsl:param name="seconds"/>
         <xsl:variable name="totalseconds">
             <xsl:value-of select="0 + $seconds"/>
@@ -95,35 +98,35 @@
                 <!-- ***************************************************** -->
                 <fileDesc>
                     <titleStmt>
-                        <title/>
+                        <title><xsl:value-of select="/*/@dgd-id"/></title>
                     </titleStmt>
-                    <publicationStmt>
-                        <authority><!--Fill me in--></authority>
+                    <!-- <publicationStmt>
+                        <authority/>
                         <availability>
                             <licence target="someurl"/>
-                            <p><!--Fill me in--></p>
+                            <p></p>
                         </availability>
-                        <distributor><!--Fill me in--></distributor>
+                        <distributor></distributor>
                         <address>
-                           <addrLine><!--Fill me in--></addrLine>
+                           <addrLine></addrLine>
                         </address>
-                    </publicationStmt>
+                    </publicationStmt> -->
                     <!-- ***************************************************** -->
                     <sourceDesc>
                         <recordingStmt>
                             <recording type="audio">
                                 <!-- element from TEI P5, but not allowed there as a child of recording -->
                                 <xsl:apply-templates select="//recording"/>
-                                <broadcast>
+                                <!-- <broadcast>
                                     <ab><xsl:comment>Fill me in</xsl:comment></ab>
-                                </broadcast>
+                                </broadcast> -->
                                 <!-- information about the equipment used for creating the recording -->
                                 <!-- where recordings are made by the researcher, this would be -->
                                 <!-- place to specify the recording equipment (e.g. Camcorder) -->
-                                <equipment>
+                                <!-- <equipment>
                                     <ab><xsl:comment>Fill me in</xsl:comment></ab>
                                     <ab><xsl:comment>Fill me in</xsl:comment></ab>
-                                </equipment>                  
+                                </equipment> -->                  
                             </recording>
                         </recordingStmt>                                        
                     </sourceDesc>
@@ -140,19 +143,19 @@
                                 <xsl:attribute name="xml:id" select="$ANONYMOUS_SPEAKER_ID"/>
                                 <xsl:attribute name="n" select="$ANONYMOUS_SPEAKER_ID"/>
                                 <persName>
-                                    <forename>Anonymous</forename>
+                                    <!-- <forename>Anonymous</forename> -->
                                     <abbr><xsl:value-of select="$ANONYMOUS_SPEAKER_ID"/></abbr>
                                 </persName>
                             </person>                            
                         </xsl:if>
                     </particDesc>        
                     <!-- ***************************************************** -->                
-                    <settingDesc>
+                    <!-- <settingDesc>
                         <place><xsl:comment>Fill me in</xsl:comment></place>
                         <setting>
                             <activity><xsl:comment>Fill me in</xsl:comment></activity>
                         </setting>
-                    </settingDesc>                    
+                    </settingDesc> -->                    
                 </profileDesc>
                 <encodingDesc>
                     <appInfo>
@@ -165,7 +168,7 @@
                     </appInfo>       
                     <!-- information about the transcription convention used -->
                     <!-- change 03-03-2016: namespace switch no longer necessary -->
-                    <transcriptionDesc ident="cGAT" version="2009">
+                    <transcriptionDesc ident="cGAT" version="2014">
                         <desc><xsl:comment>Fill me in</xsl:comment></desc>
                         <label><xsl:comment>Fill me in</xsl:comment></label>
                     </transcriptionDesc>
@@ -214,7 +217,8 @@
     </xsl:template>
     
     
-    <xsl:template match="contribution[@speaker-reference or count(child::*[not(self::pause or self::non-phonological or self::time)])&gt;0]">
+    <!-- contributions which have a speaker or something other than a pause, a non-pho, a breathe or a time -->
+    <xsl:template match="contribution[@speaker-reference or count(child::*[not(self::pause or self::non-phonological or self::breathe or self::time)])&gt;0]">
         <!-- change 03-03-2016: element renamed, namespace switch no longer necessary -->        
         <xsl:element name="annotationBlock" xmlns="http://www.tei-c.org/ns/1.0">            
             <xsl:attribute name="xml:id">
@@ -243,7 +247,18 @@
                 <xsl:attribute name="xml:id">
                      <xsl:text>u_</xsl:text><xsl:value-of select="generate-id()"/>
                 </xsl:attribute>
-                <xsl:apply-templates/>
+                <!-- changed 05-07-2018 - enforce a seg if so desired -->
+                <xsl:choose>
+                    <xsl:when test="$ENFORCE_SEG='TRUE' and not(child::line)">
+                        <seg xmlns="http://www.tei-c.org/ns/1.0" type="contribution">
+                            <xsl:attribute name="xml:id">seg_<xsl:value-of select="generate-id()"/></xsl:attribute>                                        
+                            <xsl:apply-templates/>
+                        </seg>                           
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:apply-templates/>                        
+                    </xsl:otherwise>
+                </xsl:choose>
             </xsl:element> <!-- end u -->
             
             <!-- take care of annotations belonging to this u -->            
@@ -350,6 +365,34 @@
         <xsl:apply-templates select="pause|non-phonological|breathe"/>
     </xsl:template>
             
+    <xsl:template match="line">
+        <!-- <line>
+            <w>scheiß</w>
+            <time timepoint-reference="TLI_13"/>
+            <w>dosenöffner</w>
+            <boundary type="final" movement="not-qualified" latching="no"/>
+        </line> -->
+        <seg xmlns="http://www.tei-c.org/ns/1.0" type="line">
+            <xsl:attribute name="xml:id">
+                <xsl:choose>
+                    <xsl:when test="@id"><xsl:value-of select="@id"/></xsl:when>
+                    <xsl:otherwise>seg_<xsl:value-of select="generate-id()"/></xsl:otherwise>
+                </xsl:choose>
+            </xsl:attribute>            
+            <xsl:attribute name="subtype">
+                <xsl:value-of select="child::boundary/@type"/>
+                <xsl:text> </xsl:text>
+                <xsl:value-of select="child::boundary/@movement"/>
+                <xsl:if test="child::boundary/@latching='yes'">
+                    <xsl:text> latching</xsl:text>
+                </xsl:if>
+            </xsl:attribute>
+            <xsl:apply-templates/>            
+        </seg>
+            
+        
+    </xsl:template>
+    
     <xsl:template match="time">
         <xsl:element name="anchor" xmlns="http://www.tei-c.org/ns/1.0">
             <xsl:attribute name="synch">
@@ -371,11 +414,18 @@
             <xsl:attribute name="xml:id">
                 <xsl:choose>
                     <xsl:when test="@id"><xsl:value-of select="@id"/></xsl:when>
-                    <xsl:otherwise>w<xsl:value-of select="generate-id()"/></xsl:otherwise>
+                    <xsl:otherwise>w_<xsl:value-of select="generate-id()"/></xsl:otherwise>
                 </xsl:choose>
             </xsl:attribute>
-            <xsl:if test="@transition='assimilated'">
-                <xsl:attribute name="type">assimilated</xsl:attribute>
+            <xsl:if test="@transition or ancestor::uncertain">
+                <xsl:attribute name="type">
+                    <xsl:variable name="TYPE_VALUE">
+                        <xsl:if test="@transition='assimilated'">assimilated </xsl:if>
+                        <!-- added 05-07-2018 -->
+                        <xsl:if test="ancestor::uncertain">uncertain </xsl:if>
+                    </xsl:variable>
+                    <xsl:value-of select="normalize-space($TYPE_VALUE)"/>
+                </xsl:attribute>
             </xsl:if>
             
             <!-- new 22-06-2018: optionally include inline attributes -->
@@ -459,11 +509,14 @@
     </xsl:template>
     
     <!-- 04-05-2015: TODO! -->
+    <!-- changed 01-06-2018 -->
+    <!-- changed again because alternatives should be mapped onto a spanGrp -->
+    <!-- changed again (05-07-2018) uncertainty should be encoded in an attribute @type -->
     <xsl:template match="uncertain">
-        <unclear xmlns="http://www.tei-c.org/ns/1.0">
-            <!-- changed 01-06-2018 -->
+        <!-- <unclear xmlns="http://www.tei-c.org/ns/1.0"> -->
             <xsl:apply-templates select="child::*[not(self::alternative)]"/>
-            <!-- <xsl:choose>
+        <!-- </unclear> -->
+        <!-- <xsl:choose>
                 <xsl:when test="not(alternative)">
                     <xsl:apply-templates/>
                 </xsl:when>
@@ -482,7 +535,6 @@
                     </choice>
                 </xsl:otherwise>
             </xsl:choose> -->
-        </unclear>
         <!-- <xsl:choose>
             <xsl:when test="not(alternative)">
                 <unclear xmlns="http://www.tei-c.org/ns/1.0">
@@ -513,7 +565,7 @@
             
     <xsl:template match="recording">
         <media  xmlns="http://www.tei-c.org/ns/1.0">
-            <xsl:attribute name="mimeType"><xsl:value-of select="tesla:determine-recording-type(@path)"/>/wav</xsl:attribute>
+            <xsl:attribute name="mimeType"><xsl:value-of select="exmaralda:determine-recording-type(@path)"/>/wav</xsl:attribute>
             <xsl:attribute name="url"><xsl:value-of select="@path"/></xsl:attribute>
         </media>        
     </xsl:template> 
